@@ -46,7 +46,7 @@ streamlit run app.py
 - **VLM**: Hugging Face ready models + strong heuristic fallback
 - **Change Detection**: Structural similarity + absolute difference
 - **Optical-SAR**: Side-by-side analysis + complementary extraction
-- **Fine-tuning**: Placeholder ready for BigEarthNet adaptation
+- **Fine-tuning**: Qwen3-VL-4B + LoRA on BigEarthNet.txt (see `weights/bigearthnet_lora`)
 - **Output**: Text + visual evidence + confidence + execution summary
 
 ---

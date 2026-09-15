@@ -14,8 +14,17 @@ import os
 # Ensure src is importable
 sys.path.insert(0, str(Path(__file__).parent))
 
+# MUST load .env before importing VLM wrapper (it reads env at import time)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent / ".env")
+except Exception:
+    pass
+
 from src.agent.orchestrator import SatQueryOrchestrator
 from src.utils.validation import get_input_summary
+from src.utils.geotiff_utils import read_geospatial_metadata
+from src.ui.components import render_metrics_row, render_quantitative_summary, render_downloads
 
 st.set_page_config(
     page_title="SatQuery AI | ISRO SIH 2026",
@@ -67,6 +76,66 @@ def save_uploaded_file(uploaded_file) -> Path:
     tmp.write(uploaded_file.getvalue())
     tmp.close()
     return Path(tmp.name)
+
+
+def render_results(result, paths):
+    """Renders the full Output Layer for a given orchestrator result.
+    Pulled into its own function so results persist across tab switches /
+    download-button clicks (Streamlit reruns the whole script on each interaction)."""
+    if not result.get("success"):
+        st.error(f"Analysis failed: {result.get('error', 'Unknown error')}")
+        if "validation" in result:
+            st.json(result["validation"])
+        return
+
+    st.markdown("### ✅ Analysis Complete")
+
+    render_metrics_row(result)
+    if result.get("plan"):
+        st.caption(f"🧠 Agent plan: {result['plan']}")
+
+    st.markdown("---")
+
+    # Answer
+    st.subheader("📝 Answer")
+    st.markdown(f'<div class="success-box">{result.get("answer", "No answer generated.")}</div>', unsafe_allow_html=True)
+
+    # Visual Evidence
+    st.subheader("🖼️ Visual Evidence")
+    if result.get("visual_evidence") is not None:
+        vis = result["visual_evidence"]
+        if isinstance(vis, np.ndarray):
+            st.image(vis, caption="Analysis Visualization (Input(s) + Evidence)", use_container_width=True)
+    elif result.get("change_mask") is not None:
+        st.image(result["change_mask"], caption="Change Mask", use_container_width=True, clamp=True)
+    else:
+        cols = st.columns(len(paths))
+        for i, p in enumerate(paths):
+            with cols[i]:
+                st.image(str(p), caption=f"Input {i+1}", use_container_width=True)
+
+    if result.get("bbox"):
+        st.info(f"Grounding BBox (demo): {result['bbox']}")
+
+    # Quantitative Summary (Output Layer)
+    st.markdown("---")
+    st.subheader("📊 Quantitative Summary")
+    render_quantitative_summary(result)
+
+    # Models + Validation
+    st.markdown("---")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("🤖 Models Used")
+        for m in result.get("models_used", []):
+            st.markdown(f"- `{m}`")
+    with c2:
+        st.subheader("✅ Validation Summary")
+        st.text(result.get("validation_summary", ""))
+
+    # Downloadables (Output Layer)
+    st.markdown("---")
+    render_downloads(result, reference_meta=st.session_state.get("last_geo_meta_raw"))
 
 
 def main():
@@ -155,59 +224,16 @@ def main():
                     orchestrator = SatQueryOrchestrator()
                     result = orchestrator.run(paths, query, user_modality_hints=hints)
 
-                    # Store in session
+                    # Store in session (keep a *raw* geo-metadata copy with the
+                    # rasterio transform intact, for GeoTIFF export downstream)
                     st.session_state["last_result"] = result
                     st.session_state["last_paths"] = paths
+                    st.session_state["last_geo_meta_raw"] = read_geospatial_metadata(paths[0])
 
-                # Display results
-                if not result.get("success"):
-                    st.error(f"Analysis failed: {result.get('error', 'Unknown error')}")
-                    if "validation" in result:
-                        st.json(result["validation"])
-                else:
-                    st.markdown("### ✅ Analysis Complete")
-
-                    # Metrics
-                    m1, m2, m3, m4 = st.columns(4)
-                    m1.metric("Primary Task", result.get("primary_task", "—").upper())
-                    m2.metric("Input Type", result.get("input_type", "—"))
-                    m3.metric("Confidence", f"{result.get('confidence', 0):.0%}")
-                    m4.metric("Models Used", len(result.get("models_used", [])))
-
-                    st.markdown("---")
-
-                    # Answer
-                    st.subheader("📝 Answer")
-                    st.markdown(f'<div class="success-box">{result.get("answer", "No answer generated.")}</div>', unsafe_allow_html=True)
-
-                    # Visual Evidence
-                    st.subheader("🖼️ Visual Evidence")
-                    if result.get("visual_evidence") is not None:
-                        vis = result["visual_evidence"]
-                        if isinstance(vis, np.ndarray):
-                            st.image(vis, caption="Analysis Visualization (Input(s) + Evidence)", use_container_width=True)
-                    elif result.get("change_mask") is not None:
-                        st.image(result["change_mask"], caption="Change Mask", use_container_width=True, clamp=True)
-                    else:
-                        # Show original images
-                        cols = st.columns(len(paths))
-                        for i, p in enumerate(paths):
-                            with cols[i]:
-                                st.image(str(p), caption=f"Input {i+1}", use_container_width=True)
-
-                    if result.get("bbox"):
-                        st.info(f"Grounding BBox (demo): {result['bbox']}")
-
-                    # Models + Validation
-                    st.markdown("---")
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.subheader("🤖 Models Used")
-                        for m in result.get("models_used", []):
-                            st.markdown(f"- `{m}`")
-                    with c2:
-                        st.subheader("✅ Validation Summary")
-                        st.text(result.get("validation_summary", ""))
+                render_results(result, paths)
+        elif "last_result" in st.session_state:
+            # Persist last analysis across reruns (tab switches, download clicks, etc.)
+            render_results(st.session_state["last_result"], st.session_state.get("last_paths", []))
 
     with tab2:
         st.subheader("🕵️ Auditable Execution Trace")
@@ -229,26 +255,25 @@ def main():
         st.markdown("""
         **SatQuery AI MVP** – Built for ISRO Smart India Hackathon 2026 (PS-26167)
 
-        ### Architecture Highlights
-        - **Agentic Orchestrator**: Query understanding → Task classification → Model selection → Execution → Fusion
-        - **Input Validation**: Format, count, modality, basic geospatial checks
-        - **Specialist Modules**:
-          - Single-image VQA / Caption / Grounding
-          - Bi-temporal Change Detection
-          - Optical + SAR Cross-modal Analysis
-        - **Output**: Text answer + Visual evidence + Confidence + Full execution summary
+        ### Architecture Layers (matches system diagram)
+        1. **Input Layer** – natural-language query + Single Image / Bi-temporal Pair / Optical+SAR Pair
+        2. **Data Ingestion & Preprocessing** – file validation, metadata extraction, georeferencing (real or synthetic CRS/transform), tiling/normalization
+        3. **AI Agent Orchestration Layer (The Brain)** – Query Understanding → Input Analyzer → Task Planner → Tool/Model Selector → Execution Manager (`src/agent/`)
+        4. **Specialist Tools / Models Layer** – RS-VLM (Core), Change Detection Model, Optical-SAR Fusion Model, backed by a Model Registry (`src/models/`, `src/analysis/`)
+        5. **Geospatial Processing Layer** – raster operations, change-area statistics (pixels → m² / ha / km²), coordinate transforms, map rendering (`src/utils/geotiff_utils.py`, `src/utils/visualization.py`)
+        6. **Output Layer** – Natural-language answer, Visual evidence (bbox / change heatmap / overlay), Quantitative summary, Execution summary, and **Downloadables (GeoTIFF, PDF, JSON)**
 
-        ### Current MVP Limitations (by design for speed)
-        - Uses strong heuristics + lightweight methods (real BigEarthNet fine-tuned VLM can be plugged later)
-        - Change detection is classical (SSIM/diff) – replaceable with ChangeFormer/ChangeMamba
-        - Grounding is demonstrative (central region)
-        - Full GeoTIFF CRS / co-registration checks are basic
+        ### Current MVP Design Notes
+        - RS-VLM (Core) defaults to a fast heuristic backend so the app runs with **zero downloads**; set `SATQUERY_USE_HF=1` in `.env` to route captioning/VQA through a real Hugging Face VLM (BLIP by default) with automatic fallback to heuristics on any failure.
+        - Change detection uses grayscale absolute-difference + morphological cleanup — swappable for ChangeFormer/ChangeMamba behind the same `run_change_detection()` interface.
+        - Georeferencing: real GeoTIFFs use their embedded CRS/transform; plain PNG/JPEG inputs get a synthetic 10 m/pixel transform so area statistics and GeoTIFF export still work end-to-end.
+        - Grounding boxes are heuristic (query-keyword driven) — swappable for a real referring-expression model.
 
         ### Next Upgrades
-        1. Fine-tune InternVL / Qwen2.5-VL on BigEarthNet.txt (LoRA)
-        2. Integrate deep change detection model
+        1. Fine-tune InternVL / Qwen2.5-VL on BigEarthNet (LoRA) as the RS-VLM backend
+        2. Integrate a deep change-detection model (ChangeFormer/ChangeMamba)
         3. Real referring-expression grounding
-        4. Downloadable PDF + GeoJSON report
+        4. True raster co-registration for bi-temporal pairs
         5. Better confidence calibration
         """)
 

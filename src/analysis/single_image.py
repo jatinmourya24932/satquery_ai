@@ -240,9 +240,21 @@ def run_single_image_analysis(
             }
         }
 
+        # RS-VLM (Core): Qwen3-VL (+ optional BigEarthNet LoRA) if enabled, else heuristic.
+        try:
+            from src.models.vlm_wrapper import RSVLMCore
+            vlm = RSVLMCore.get()
+            info = vlm.info()
+            result["model_used"] = info.get("model_id", "unknown")
+            result["vlm_backend"] = info.get("backend", "unknown")
+            result["lora_adapter"] = info.get("lora_adapter")
+        except Exception as e:
+            vlm = None
+            result["vlm_backend"] = f"load_failed: {e}"
+
         if task == "caption":
-            result["answer"] = heuristic_caption(arr, filename)
-            result["confidence"] = 0.72
+            result["answer"] = vlm.caption(path, arr, filename) if vlm else heuristic_caption(arr, filename)
+            result["confidence"] = 0.85 if (vlm and vlm.backend != "heuristic") else 0.72
         elif task == "grounding":
             ground = basic_grounding(query, arr)
             result["answer"] = f"Highlighted region for query: '{query}'"
@@ -250,8 +262,8 @@ def run_single_image_analysis(
             result["confidence"] = ground["confidence"]
             result["note"] = ground["note"]
         else:
-            result["answer"] = heuristic_vqa(query, arr, filename)
-            result["confidence"] = 0.70
+            result["answer"] = vlm.vqa(path, query, arr, filename) if vlm else heuristic_vqa(query, arr, filename)
+            result["confidence"] = 0.85 if (vlm and vlm.backend != "heuristic") else 0.70
 
         result["image_size"] = list(arr.shape[:2])
         return result

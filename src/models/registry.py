@@ -11,19 +11,33 @@ import logging
 logger = logging.getLogger(__name__)
 
 DEFAULT_REGISTRY = {
-    "rs_vlm_heuristic": {
-        "name": "RS-VLM Heuristic + HF Fallback",
+    "rs_vlm_qwen3_bigearthnet": {
+        "name": "RS-VLM Qwen3-VL + BigEarthNet.txt LoRA",
         "type": "vlm",
-        "capabilities": ["vqa", "caption", "grounding", "optical", "sar", "single"],
-        "description": "Lightweight VLM wrapper with strong remote-sensing heuristics",
+        "capabilities": ["vqa", "caption", "grounding", "optical", "single"],
+        "description": (
+            "Qwen3-VL-4B-Instruct fine-tuned with LoRA on BigEarthNet.txt "
+            "(binary/MCQ VQA, captioning, referring expressions). "
+            "Mandatory visual adaptation for PS-26167."
+        ),
+        "base_model": "Qwen/Qwen3-VL-4B-Instruct",
+        "adapter": "weights/bigearthnet_lora",
         "status": "active",
         "priority": 1,
     },
+    "rs_vlm_heuristic": {
+        "name": "RS-VLM Heuristic Fallback",
+        "type": "vlm",
+        "capabilities": ["vqa", "caption", "grounding", "optical", "single"],
+        "description": "Fast dependency-free analyzer used when HF model is unavailable",
+        "status": "active",
+        "priority": 10,
+    },
     "change_detector_v1": {
-        "name": "Structural Change Detector",
+        "name": "Bi-temporal Change Detector",
         "type": "change",
-        "capabilities": ["change_mask", "bi_temporal", "change_description"],
-        "description": "SSIM + absolute difference based change detection",
+        "capabilities": ["change", "bi_temporal"],
+        "description": "Optical change detection between two co-registered scenes",
         "status": "active",
         "priority": 1,
     },
@@ -39,7 +53,7 @@ DEFAULT_REGISTRY = {
         "name": "Scene Captioner",
         "type": "caption",
         "capabilities": ["caption", "single"],
-        "description": "Remote-sensing oriented scene description",
+        "description": "Remote-sensing oriented scene description (routes to RS-VLM)",
         "status": "active",
         "priority": 2,
     },
