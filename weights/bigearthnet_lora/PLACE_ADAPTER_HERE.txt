@@ -1,0 +1,3 @@
+Copy your trained LoRA files here:
+  - adapter_config.json
+  - adapter_model.safetensors  (or adapter_model.bin)
