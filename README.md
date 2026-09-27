@@ -1,195 +1,196 @@
-# SatQuery AI
-### An Interactive Vision-Language Assistant for Multimodal Remote Sensing Image Analysis
+🚀 SatQuery AI
+Interactive Vision-Language Assistant for Multimodal Remote Sensing Image Analysis
+Smart India Hackathon 2026 | Problem Statement ID: 26167  
+Organization: Indian Space Research Organisation (ISRO)
+Team: Certified Bug Hunters
+Theme: Space Technology | Category: Software
 
-**Smart India Hackathon 2026 | Problem Statement ID: 26167**  
-**Organization:** Indian Space Research Organisation (ISRO)  
-**Team:** Certified Bug Hunters  
-**Theme:** Space Technology | Category: Software
+🌍 Overview
+SatQuery AI is a cutting-edge vision-language agent for satellite imagery analysis. It allows natural-language queries on remote sensing data and returns evidence-grounded answers with bounding boxes, confidence scores, and interactive map visualization.
 
----
+With the new Next.js frontend + live map integration, users can:
 
-## Overview
+Upload satellite imagery (GeoTIFF / Optical / SAR / Bi-temporal)
 
-**SatQuery AI** is an agentic vision-language system that answers natural-language queries about satellite imagery.
+Interactively explore results on a Leaflet/Mapbox-powered map
 
-It automatically:
+View bounding boxes, overlays, and change detection directly on the map
 
-1. Validates input images (GeoTIFF / Optical / SAR / Bi-temporal)
-2. Understands the user query
-3. Selects the right specialist pipeline
-4. Executes the analysis
-5. Fuses results
-6. Returns **evidence-grounded** answers with visual highlights, confidence scores, and a full execution summary
+Get auditable execution summaries for every query
 
-### Supported Capabilities (MVP)
+🏗 Architecture 
 
-- Single-image Visual Question Answering (VQA)
-- Image Captioning / Scene Description
-- Text-guided Multi-region Grounding (Water / Built-up / Vegetation)
-- Bi-temporal Change Detection + Change Description
-- Optical + SAR Cross-modal Analysis
-- Agentic Orchestration with Auditable Execution Trace
-- Support for both normal images (PNG/JPG) and GeoTIFF
+```mermaid
+flowchart TD
+    %% Input Layer
+    A[User Query and Satellite Images] --> B[Input Validation and Preprocessing]
 
----
+    %% Validation
+    B -->|Check format| B1{GeoTIFF / Optical / SAR / Bi-temporal?}
+    B1 -->|Valid| C[Task Classifier]
+    B1 -->|Invalid| BX[Error: Unsupported Format]
 
-## Tech Stack
+    %% Task Classification
+    C -->|Intent Detection| D[AI Agent Orchestrator]
 
-| Layer              | Technology                                      |
-|--------------------|-------------------------------------------------|
-| **Frontend**       | Next.js 13 + Tailwind CSS + shadcn/ui           |
-| **Backend**        | FastAPI (Python)                                |
-| **Core VLM**       | Qwen3-VL-4B-Instruct + BigEarthNet LoRA         |
-| **Orchestration**  | Rule-based Task Classifier + Agentic Router     |
-| **Geospatial**     | rasterio + GeoTIFF support                      |
-| **Visualization**  | Multi-region Bounding Boxes + Evidence Panels   |
+    %% Orchestration
+    D --> E1[Single Image Analysis]
+    D --> E2[Bi-temporal Change Detection]
+    D --> E3[Optical-SAR Fusion]
+    D --> E4[Captioning and Grounding]
 
----
+    %% Specialist Pipelines
+    E1 --> F[Qwen3-VL with BigEarthNet LoRA]
+    E2 --> F
+    E3 --> F
+    E4 --> F
 
-## Architecture Flow
+    %% Fusion Layer
+    F --> G[Result Fusion]
+
+    %% Output Layer
+    G --> H1[Evidence-Grounded Answer]
+    G --> H2[Bounding Boxes and Confidence Scores]
+    G --> H3[Interactive Map Visualization]
+
+    %% Evidence Layer
+    H3 --> H4[Map Overlays: Highlighted Regions and Change Panels]
+
+    %% Frontend Integration
+    H1 --> I[Next.js Frontend]
+    H2 --> I
+    H4 --> I
+
+    %% User Experience
+    I --> J[User Views Results: Map, Evidence Panels, Execution Trace]
 
 ```
-User Query + Image(s)
-        ↓
-Input Validation (GeoTIFF / Optical / SAR / Bi-temporal)
-        ↓
-Task Classifier (VQA / Caption / Grounding / Change / Optical-SAR)
-        ↓
-Agentic Orchestrator → Selects specialist pipeline
-        ↓
-Model Execution (Qwen3-VL + dedicated modules)
-        ↓
-Result Fusion
-        ↓
-Evidence-Grounded Output
-(Answer + Bounding Boxes + Confidence + Execution Summary)
-```
 
----
+🛠 Tech Stack
+Layer	Technology
+Frontend	Next.js 13 + Tailwind CSS + shadcn/ui + Leaflet/Mapbox
+Backend	FastAPI (Python)
+Core VLM	Qwen3-VL-4B-Instruct + BigEarthNet LoRA
+Orchestration	Rule-based Task Classifier + Agentic Router
+Geospatial	rasterio + GeoTIFF utilities
+Visualization	Multi-region bounding boxes + Interactive Map
 
-## Quick Start
+⚡ Capabilities (MVP)
+✅ Single-image Visual Question Answering (VQA)
 
-### 1. Backend Setup
+✅ Image Captioning & Scene Description
 
-```bash
-# Create and activate virtual environment
+✅ Text-guided Multi-region Grounding (Water / Built-up / Vegetation)
+
+✅ Bi-temporal Change Detection + Change Description
+
+✅ Optical + SAR Cross-modal Analysis
+
+✅ Agentic Orchestration with Execution Trace
+
+✅ Interactive Map Visualization (Leaflet/Mapbox)
+
+🚀 Quick Start
+Backend Setup
+bash
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Run FastAPI server
 python -m uvicorn api:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### 2. Frontend Setup
-
-```bash
-cd SatQuery_Frontend                     # or your Next.js project folder
+Frontend Setup
+bash
+cd SatQuery_frontend
 npm install
 npm run dev
-```
+Frontend → http://localhost:3000
 
-Frontend will be available at `http://localhost:3000`  
-Backend API runs at `http://localhost:8000`
+Backend → http://localhost:8000
 
----
-
-## Environment Variables
-
-Create a `.env` file in the backend root:
-
-```env
+🔧 Environment Variables
+env
 SATQUERY_USE_HF=1
 SATQUERY_HF_MODEL_ID=Qwen/Qwen3-VL-4B-Instruct
 SATQUERY_LORA_ADAPTER=weights/bigearthnet_lora
 SATQUERY_LOAD_4BIT=1
-```
+📂 Supported File Formats
+Format	Supported	Notes
+PNG / JPG / JPEG	Yes	Standard RGB images
+GeoTIFF (.tif)	Yes	Full geospatial metadata
+SAR Images	Yes	Optical + SAR cross-analysis
 
----
 
-## Supported File Formats
-
-| Format              | Supported | Notes                          |
-|---------------------|-----------|--------------------------------|
-| PNG / JPG / JPEG    | Yes       | Standard RGB images            |
-| GeoTIFF (.tif/.tiff)| Yes       | Full geospatial metadata support |
-| SAR images          | Yes       | Cross-modal analysis           |
-
----
-
-## Example Queries
-
-```
+💡 Example Queries
 Detect water bodies
+
 Identify built-up and water regions
+
 Highlight vegetation
-Where are the urban areas?
+
+Compare two images and show changes
+
 Describe this satellite image
-Compare the two images and show changes
-```
 
----
+🏆 Mandatory PS Coverage
+Requirement	Status
+Single-image VQA	✅
+Captioning / Grounding	✅
+Bi-temporal Change Analysis	✅
+Optical + SAR Cross-modal	✅
+Agentic Model / Pipeline Selection	✅
+Input Validation	✅
+Evidence + Confidence + Summary	✅
+Remote-sensing adaptation	✅
+Interactive Map Visualization	✅
 
-## Mandatory PS Coverage
 
-| Requirement                         | Status in MVP |
-|-------------------------------------|---------------|
-| Single-image VQA                    | Yes           |
-| Captioning / Grounding              | Yes           |
-| Bi-temporal Change Analysis         | Yes           |
-| Optical + SAR Cross-modal           | Yes           |
-| Agentic Model / Pipeline Selection  | Yes           |
-| Input Validation                    | Yes           |
-| Evidence + Confidence + Summary     | Yes           |
-| Remote-sensing adaptation           | Yes (Qwen3-VL + BigEarthNet LoRA) |
+🌟 Key Innovations
+Agentic Orchestration → Auto-routing to correct pipeline
 
----
+Multimodal Support → Single, Bi-temporal, Optical + SAR
 
-## Key Innovations
+Remote Sensing Adaptation → BigEarthNet fine-tuning
 
-- **Agentic Orchestration** → Automatically routes query to the correct specialist pipeline
-- **Multimodal Support** → Single image | Bi-temporal | Optical + SAR
-- **Remote Sensing Adaptation** → Fine-tuned on BigEarthNet
-- **Evidence-Grounded Output** → Answer + Highlighted Regions + Confidence
-- **Fully Auditable** → Complete Execution Trace
+Evidence-Grounded Output → Bounding boxes + Confidence
 
----
+Interactive Map → Visual overlays for user queries
 
-## Project Structure (Backend)
+Auditable Execution → Transparent trace for every query
 
-```
+📁 Project Structure
+bash
 satquery_ai/
-├── api.py                          # FastAPI entry point
+├── api.py                # FastAPI entry point
 ├── src/
 │   ├── agent/
-│   │   ├── orchestrator.py         # Main agentic brain
-│   │   └── task_classifier.py      # Query intent classification
+│   │   ├── orchestrator.py
+│   │   └── task_classifier.py
 │   ├── analysis/
-│   │   ├── single_image.py         # VQA / Caption / Grounding
-│   │   ├── change_detection.py     # Bi-temporal analysis
-│   │   ├── optical_sar.py          # Cross-modal analysis
-│   │   └── fusion.py               # Result fusion
+│   │   ├── single_image.py
+│   │   ├── change_detection.py
+│   │   ├── optical_sar.py
+│   │   └── fusion.py
 │   ├── models/
-│   │   └── vlm_wrapper.py          # Qwen3-VL + LoRA wrapper
+│   │   └── vlm_wrapper.py
 │   └── utils/
 │       ├── validation.py
-│       ├── visualization.py        # Multi-box drawing
+│       ├── visualization.py
 │       └── geotiff_utils.py
 └── weights/
-    └── bigearthnet_lora/           # LoRA adapter weights
-```
+    └── bigearthnet_lora/
+SatQuery_frontend/
+├── pages/                # Next.js routes
+├── components/           # UI + Map components
+├── lib/                  # API integration
+└── public/               # Static assets
+🎯 Impact Statement
+SatQuery AI combines AI + Geospatial Intelligence to deliver actionable insights for:
 
----
+🌊 Disaster Management → Flood/landslide change detection
 
-## Notes
+🌱 Agriculture Monitoring → Vegetation health tracking
 
-- Grounding currently uses improved multi-region heuristic detection (color + contour based) because the base Qwen3-VL model does not natively output bounding boxes.
-- The architecture is modular — additional specialist models can be plugged in easily.
-- Designed as a 1–2 day MVP for Smart India Hackathon 2026.
+🏙 Urban Planning → Built-up area growth analysis
 
----
+🌳 Environmental Monitoring → Deforestation detection
 
-**Built for SIH 2026 – Space Technology Theme**  
-**Team: Certified Bug Hunters**
+With interactive maps + evidence-grounded outputs, SatQuery AI sets a benchmark for next-gen space technology solutions.
