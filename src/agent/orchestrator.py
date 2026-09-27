@@ -1,10 +1,5 @@
 """
 Agentic Orchestrator for SatQuery AI
-Interprets query, validates input, selects models, executes, fuses results,
-and packages the final answer + visual evidence + quantitative summary +
-execution trace - i.e. it *is* the "AI Agent Orchestration Layer (The Brain)"
-box in the architecture diagram (Query Understanding -> Input Analyzer ->
-Task Planner -> Tool/Model Selector -> Execution Manager).
 """
 
 from typing import List, Dict, Any, Optional
@@ -15,7 +10,7 @@ from datetime import datetime
 
 from src.utils.validation import validate_inputs, get_input_summary
 from src.utils.geotiff_utils import read_geospatial_metadata, changed_area_stats
-from src.utils.visualization import draw_bbox_on_image, side_by_side
+from src.utils.visualization import draw_bbox_on_image, draw_bboxes_on_image, side_by_side
 from src.models.registry import ModelRegistry
 from src.analysis.single_image import run_single_image_analysis, load_image
 from src.analysis.change_detection import run_change_detection
@@ -60,7 +55,6 @@ class SatQueryOrchestrator:
         self.trace = ExecutionTrace()
         self.trace.add("start", {"query": query, "num_images": len(image_paths)})
 
-        # --- 2. Data Ingestion & Preprocessing (validation + geo metadata) ---
         validation = validate_inputs(image_paths, query, user_modality_hints)
         self.trace.add("validation", validation.to_dict())
 
@@ -78,7 +72,6 @@ class SatQueryOrchestrator:
             "crs": [m.get("crs") for m in geo_meta],
         })
 
-        # --- 3. AI Agent Orchestration Layer: Query Understanding + Task Planner ---
         task_info = classify_task(query, validation.input_type, validation.modalities)
         self.trace.add("task_classification", task_info)
 
@@ -86,7 +79,6 @@ class SatQueryOrchestrator:
         results: List[Dict[str, Any]] = []
         models_used: List[str] = []
 
-        # --- 4. Specialist Tools / Models Layer: Tool/Model Selector + Execution Manager ---
         try:
             if primary == "change" and validation.image_count == 2:
                 self.trace.add("select_model", {"model": "change_detector_v1"})
@@ -117,7 +109,7 @@ class SatQueryOrchestrator:
                 results.append(res)
                 models_used.append(res.get("model_used", "rs_vlm_heuristic"))
 
-            else:  # vqa default
+            else:
                 self.trace.add("select_model", {"model": "rs_vlm (vqa)"})
                 res = run_single_image_analysis(image_paths[0], query, task="vqa")
                 results.append(res)
@@ -139,23 +131,19 @@ class SatQueryOrchestrator:
                 "execution_summary": self.trace.summary(),
             }
 
-        # --- Fusion: Natural Language Answer ---
         fused = fuse_results(results, query, task_info)
         self.trace.add("fusion", {"num_results": len(results)})
 
-        # --- 5. Geospatial Processing Layer: area stats + evidence panel rendering ---
         geo_area_stats = None
         if fused.get("change_mask") is not None:
             geo_area_stats = changed_area_stats(fused["change_mask"], geo_meta[0])
             self.trace.add("geospatial_processing", {"change_area_stats": geo_area_stats})
 
-        visual_evidence = self._build_visual_evidence(fused, image_paths)
+        visual_evidence = self._build_visual_evidence(fused, image_paths, results)
 
-        # --- Quantitative Summary (Output Layer) ---
         quant_summary = build_quantitative_summary(results, geo_area_stats)
         self.trace.add("quantitative_summary", {"num_metrics": len(quant_summary.get("metrics", {}))})
 
-        # --- 6. Output Layer: package final answer ---
         final = {
             "success": True,
             "query": query,
@@ -167,6 +155,7 @@ class SatQueryOrchestrator:
             "confidence": fused["confidence"],
             "visual_evidence": visual_evidence,
             "bbox": fused.get("bbox"),
+            "bboxes": fused.get("bboxes") or (results[0].get("bboxes") if results else None),
             "change_mask": fused.get("change_mask"),
             "models_used": models_used,
             "validation_summary": get_input_summary(validation),
@@ -181,24 +170,33 @@ class SatQueryOrchestrator:
         final["execution_summary"] = self.trace.summary()
         return final
 
-    def _build_visual_evidence(self, fused: Dict[str, Any], image_paths: List[Path]):
-        """Build the final annotated 'Visual Evidence' panel (Map Rendering)."""
+    def _build_visual_evidence(
+        self,
+        fused: Dict[str, Any],
+        image_paths: List[Path],
+        results: List[Dict[str, Any]] = None,
+    ):
         try:
+            bboxes = None
+            if results and len(results) > 0:
+                bboxes = results[0].get("bboxes")
+            if not bboxes:
+                bboxes = fused.get("bboxes")
+
+            single_bbox = fused.get("bbox")
+
             base = fused.get("visual_evidence")
+            if base is None and image_paths:
+                _, base = load_image(image_paths[0])
 
-            if base is not None:
-                if fused.get("bbox") is not None:
-                    try:
-                        return draw_bbox_on_image(base, fused["bbox"], label="Region of interest")
-                    except Exception:
-                        return base
-                return base
+            if base is None:
+                return None
 
-            if fused.get("bbox") is not None:
-                _, arr = load_image(image_paths[0])
-                return draw_bbox_on_image(arr, fused["bbox"], label="Region of interest")
+            if bboxes and len(bboxes) > 0:
+                return draw_bboxes_on_image(base, bboxes)
+            elif single_bbox is not None:
+                return draw_bbox_on_image(base, single_bbox, label="Region of interest")
 
-            # Fallback: just show the input image(s) side-by-side
             arrs, labels = [], []
             for i, p in enumerate(image_paths):
                 _, arr = load_image(p)
@@ -206,7 +204,9 @@ class SatQueryOrchestrator:
                 labels.append(f"Input {i+1}")
             if arrs:
                 return side_by_side(*arrs, labels=labels)
-            return None
+
+            return base
+
         except Exception as e:
             logger.warning(f"Could not build visual evidence panel: {e}")
             return fused.get("visual_evidence")

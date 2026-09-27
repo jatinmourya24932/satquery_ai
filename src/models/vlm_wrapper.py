@@ -256,7 +256,7 @@ class RSVLMCore:
                         if self.backend == "qwen3vl_lora"
                         else "Qwen3-VL"
                     )
-                    return f"{text} [{tag}]"
+                    return text
             except Exception as e:
                 logger.warning("VLM caption failed, heuristic fallback: %s", e)
 
@@ -287,7 +287,7 @@ class RSVLMCore:
                         if self.backend == "qwen3vl_lora"
                         else "Qwen3-VL"
                     )
-                    return f"{text} [{tag}]"
+                    return text
             except Exception as e:
                 logger.warning("VLM VQA failed, heuristic fallback: %s", e)
 

@@ -1,10 +1,8 @@
 """
-Fusion module - combines outputs from one or more specialist tools into the
-final Natural-Language Answer + Quantitative Summary shown in the Output Layer.
+Fusion module - combines outputs from specialist tools into final answer.
 """
 
 from typing import List, Dict, Any
-import numpy as np
 
 
 def fuse_results(results: List[Dict[str, Any]], query: str, task_info: Dict[str, Any]) -> Dict[str, Any]:
@@ -35,7 +33,12 @@ def fuse_results(results: List[Dict[str, Any]], query: str, task_info: Dict[str,
             fused["visual_evidence"] = r["visualization"]
         if "change_mask" in r:
             fused["change_mask"] = r["change_mask"]
-        if "bbox" in r:
+
+        # Multiple boxes preferred
+        if "bboxes" in r and r["bboxes"]:
+            fused["bboxes"] = r["bboxes"]
+            fused["bbox"] = r["bboxes"][0]["bbox"]
+        elif "bbox" in r and r["bbox"] is not None:
             fused["bbox"] = r["bbox"]
 
     return fused
@@ -45,11 +48,6 @@ def build_quantitative_summary(
     results: List[Dict[str, Any]],
     geo_stats: Dict[str, Any] = None,
 ) -> Dict[str, Any]:
-    """
-    Produce the "Quantitative Summary: Metrics, statistics and insights"
-    block shown in the Output Layer of the architecture diagram.
-    Pulls together whatever numeric signals the specialist tools returned.
-    """
     summary: Dict[str, Any] = {"metrics": {}}
 
     for r in results:
@@ -65,8 +63,13 @@ def build_quantitative_summary(
                 if isinstance(v, (int, float)):
                     summary["metrics"][k] = round(v, 2)
                 elif isinstance(v, list):
-                    summary["metrics"][k] = [round(x, 2) if isinstance(x, (int, float)) else x for x in v]
+                    summary["metrics"][k] = [
+                        round(x, 2) if isinstance(x, (int, float)) else x for x in v
+                    ]
         summary["metrics"].setdefault("confidence", r.get("confidence"))
+
+        if "bboxes" in r and r["bboxes"]:
+            summary["metrics"]["num_regions_detected"] = len(r["bboxes"])
 
     if geo_stats:
         summary["area_analysis"] = geo_stats
